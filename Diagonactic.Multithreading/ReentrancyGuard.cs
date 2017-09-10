@@ -1,21 +1,11 @@
 ﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
 using System.Threading;
-using System.Threading.Tasks;
 
 namespace Diagonactic.Multithreading
 {
-    /// <summary>
-    /// Class for handling methods or code blocks that cannot allow re-entrancy
-    /// </summary>
+    /// <summary>Class for handling methods or code blocks that cannot allow re-entrancy</summary>
     public class ReentrancyGuard
     {
-        private const int ReentrancyPrevented = 1, ReentrancyAllowed = 0;
-
-        private int m_reentrancy = 0;
-
         public enum ReentrancyCallResult
         {
             Unset = 0,
@@ -24,35 +14,43 @@ namespace Diagonactic.Multithreading
             GuardBlocked = 3,
         }
 
-        public bool IsReentrancyPrevented => Interlocked.CompareExchange(ref m_reentrancy, ReentrancyPrevented, ReentrancyPrevented) == ReentrancyPrevented;
+        private const int ReentrancyPrevented = 1, ReentrancyAllowed = 0;
 
-        /// <summary>
-        /// Used at the opening of a reentrancy prevention block.  Sets guard to prevent reentrancy.
-        /// </summary>
-        /// <returns>When it's safe to enter the reentrancy prevented block, returns <see langword="true"/>; otherwise <see langword="false"/></returns>
-        public bool SetGuardAndCheckEntry()
+        private int m_reentrancyState = 0;
+
+        public bool IsReentrancyPrevented => Interlocked.CompareExchange(ref m_reentrancyState, ReentrancyPrevented, ReentrancyPrevented) == ReentrancyPrevented;
+
+        /// <summary>Used at the opening of a reentrancy prevention block.  Sets guard to prevent reentrancy.</summary>
+        /// <returns>When it's safe to enter the reentrancy prevented block, returns <see langword="true" />; otherwise <see langword="false" /></returns>
+        public virtual bool SetGuardAndCheckEntry() => Interlocked.CompareExchange(ref m_reentrancyState, ReentrancyPrevented, ReentrancyAllowed) == ReentrancyAllowed;
+
+        /// <summary>Used after the reentrancy prevention block to reset and allow future callers to enter the method.  This should always be used in a <see langword="finally" /> block to ensure it is set.</summary>
+        /// <remarks>Use <see cref="CallReentrancySafe" /> for a convenient method to implement this pattern.</remarks>
+        public virtual void AllowReentrancy()
         {
-            return Interlocked.CompareExchange(ref m_reentrancy, ReentrancyPrevented, ReentrancyAllowed) == ReentrancyAllowed;
+            Interlocked.Exchange(ref m_reentrancyState, ReentrancyAllowed);
         }
 
-        /// <summary>
-        /// Used after the reentrancy prevention block to reset and allow future callers to enter the method.  This should always be used in a <see langword="finally"/> block to ensure it is set.
-        /// </summary>
-        /// <remarks>Use <see cref="CallReentrancySafe"/> for a convenient method to implement this pattern.</remarks>
-        public void AllowReentrancy()
-        {
-            Interlocked.Exchange(ref m_reentrancy, ReentrancyAllowed);
-        }
-
-        /// <summary>
-        /// Executes <paramrf name="action"/> with reentrancy protection from <paramref name="guard"/>
-        /// </summary>
+        /// <summary>Calls the <paramref name="action" />, preventing reentrancy if the reentrancy guard indicates that this method is already running</summary>
+        /// <remarks>If the method is called but reentrancy is prevented, the code is not queued, it is simply not executed and the method returns <see cref="ReentrancyCallResult.GuardBlocked" /></remarks>
         /// <param name="guard">The reentrancy guard to use to prevent reentrancy - normally a unique guard should be used for a unique call</param>
-        /// <param name="action">The action to execute (will throw exceptions if the action throws exceptions</param>
-        /// <returns>If the guard blocks the call, returns <see cref="ReentrancyCallResult.GuardBlocked"/>; otherwise returns the result of <paramref name="action"/> as <see cref="ReentrancyCallResult.Success"/> or <see cref="ReentrancyCallResult.Fail"/></returns>
-        public static ReentrancyCallResult CallReentrancySafe(ReentrancyGuard guard, Func<bool> action)
+        /// <param name="action">Code that needs to be protected from reentrancy</param>
+        /// <returns>
+        ///     Returns <see cref="ReentrancyCallResult.Success" /> if <paramref name="action" /> is called and returns <see langword="true" />, <see cref="ReentrancyCallResult.Fail" /> if it returns <see langword="false" /> and
+        ///     <see cref="ReentrancyCallResult.GuardBlocked" /> if the code is not executed because another thread is currently executing the code.
+        /// </returns>
+        public static ReentrancyCallResult CallReentrancySafe(ReentrancyGuard guard, Func<bool> action) => guard.CallReentrancySafe(action);
+
+        /// <summary>Calls the <paramref name="action" />, preventing reentrancy if the reentrancy guard indicates that this method is already running</summary>
+        /// <remarks>If the method is called but reentrancy is prevented, the code is not queued, it is simply not executed and the method returns <see cref="ReentrancyCallResult.GuardBlocked" /></remarks>
+        /// <param name="action">Code that needs to be protected from reentrancy</param>
+        /// <returns>
+        ///     Returns <see cref="ReentrancyCallResult.Success" /> if <paramref name="action" /> is called and returns <see langword="true" />, <see cref="ReentrancyCallResult.Fail" /> if it returns <see langword="false" /> and
+        ///     <see cref="ReentrancyCallResult.GuardBlocked" /> if the code is not executed because another thread is currently executing the code.
+        /// </returns>
+        public virtual ReentrancyCallResult CallReentrancySafe(Func<bool> action)
         {
-            if (!guard.SetGuardAndCheckEntry())
+            if (!SetGuardAndCheckEntry())
                 return ReentrancyCallResult.GuardBlocked;
 
             try
@@ -61,24 +59,26 @@ namespace Diagonactic.Multithreading
             }
             finally
             {
-                guard.AllowReentrancy();
+                AllowReentrancy();
             }
         }
 
-        public static bool CallReentrancySafe(ReentrancyGuard guard, Action action)
-        {
-            if (!guard.SetGuardAndCheckEntry())
-                return false;
+        /// <summary>Calls the <paramref name="action" />, preventing reentrancy if the reentrancy guard indicates that this method is already running</summary>
+        /// <remarks>If the method is called but reentrancy is prevented, the code is not queued, it is simply not executed and the method returns <see langword="false" /></remarks>
+        /// <param name="action">Code that needs to be protected from reentrancy</param>
+        /// <returns>Returns <see langword="true" /> if the code is executed; otherwise <see langword="false"/></returns>
+        public virtual bool CallReentrancySafe(Action action) => CallReentrancySafe(() =>
+                                                                                    {
+                                                                                        action();
+                                                                                        return true;
+                                                                                    }) ==
+                                                                 ReentrancyCallResult.Success;
 
-            try
-            {
-                action();
-                return true;
-            }
-            finally
-            {
-                guard.AllowReentrancy();
-            }
-        }
+        /// <summary>Calls the <paramref name="action" />, preventing reentrancy if the reentrancy guard indicates that this method is already running</summary>
+        /// <remarks>If the method is called but reentrancy is prevented, the code is not queued, it is simply not executed and the method returns <see langword="false" /></remarks>
+        /// <param name="guard">The reentrancy guard to use to prevent reentrancy - normally a unique guard should be used for a unique call</param>
+        /// <param name="action">Code that needs to be protected from reentrancy</param>
+        /// <returns>Returns <see langword="true" /> if the code is executed; otherwise <see langword="false"/></returns>
+        public static bool CallReentrancySafe(ReentrancyGuard guard, Action action) => guard.CallReentrancySafe(action);
     }
 }

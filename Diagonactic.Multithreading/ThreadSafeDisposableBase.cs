@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Diagnostics;
 using System.Diagnostics.CodeAnalysis;
 using System.Threading;
 using JetBrains.Annotations;
@@ -11,7 +12,7 @@ namespace Diagonactic.Multithreading
     ///     DisposeManagedResources or DisposeUnmanagedResources and, of course, call Dispose or wrap in using() to dispose properly. Or be evil and let the finalizer call dispose targetting only the
     ///     unmanaged resources.
     /// </remarks>
-    public class ThreadSafeDisposableBase : IDisposable
+    public abstract class ThreadSafeDisposableBase : IDisposable
     {
         private const int Allocated = 0, Disposing = 1, Disposed = 2;
         private int m_state;

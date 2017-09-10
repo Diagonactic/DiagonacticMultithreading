@@ -11,7 +11,7 @@
     <AssemblyName>Diagonactic.Multithreading</AssemblyName>
     <TargetFrameworkVersion>v4.0</TargetFrameworkVersion>
     <FileAlignment>512</FileAlignment>
-    <TargetFrameworkProfile />
+    <TargetFrameworkProfile>Client</TargetFrameworkProfile>
   </PropertyGroup>
   <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Debug|AnyCPU' ">
     <DebugSymbols>true</DebugSymbols>
@@ -33,7 +33,7 @@
   <ItemGroup>
     <Reference Include="JetBrains.Annotations, Version=10.1.4.0, Culture=neutral, PublicKeyToken=1010a0d8d6380325, processorArchitecture=MSIL">
       <HintPath>..\packages\JetBrains.Annotations.10.1.4\lib\net20\JetBrains.Annotations.dll</HintPath>
-      <Private>True</Private>
+      <Private>False</Private>
     </Reference>
     <Reference Include="System" />
     <Reference Include="System.Core" />
@@ -45,11 +45,17 @@
     <Reference Include="System.Xml" />
   </ItemGroup>
   <ItemGroup>
+    <Compile Include="CoordinatedOperation.cs" />
+    <Compile Include="InterlockedBoolean.cs" />
+    <Compile Include="LockResult.cs" />
+    <Compile Include="ReaderWriterLockSlimExtensions.cs" />
     <Compile Include="ReentrancyGuard.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
     <Compile Include="ThreadSafeDisposableBase.cs" />
+    <Compile Include="WaitEnabledReenetrancyGuard.cs" />
   </ItemGroup>
   <ItemGroup>
+    <None Include="key.snk" />
     <None Include="packages.config" />
   </ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
@@ -60,4 +66,8 @@
   <Target Name="AfterBuild">
   </Target>
   -->
+  <Target Name="AfterBuild">
+	<Exec Command="cmd /c &quot;dir /w $(OutputPath)&quot;" />
+	<Exec Command="&quot;C:\Program Files (x86)\Windows Kits\10\bin\x64\signtool.exe&quot; sign /t http://timestamp.comodoca.com/rfc3161 $(OutputPath)$(AssemblyName).dll" />
+  </Target>
 </Project>
